@@ -1,6 +1,7 @@
 """Train LightGBM with patient-held-out evaluation and compute metrics."""
 import numpy as np
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 from lightgbm import LGBMClassifier
 from sklearn.model_selection import LeaveOneGroupOut, StratifiedKFold
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
@@ -23,11 +24,12 @@ def make_model():
     )
 
 
-def cross_validate(features, split="patient"):
+def cross_validate(features, split="patient", calibrate=False):
     """Return every window with an out-of-fold seizure probability.
 
     split="patient": train on 3 patients, test on the 4th, rotate (honest).
     split="random": 4 random folds mixing all patients (leaky, for comparison).
+    calibrate=True: wrap the model so its probabilities are corrected (Platt scaling).
     """
     X = features[feature_names()].values
     y = features["label"].values
@@ -41,8 +43,10 @@ def cross_validate(features, split="patient"):
     probs = np.zeros(len(y))
     for train_idx, test_idx in folds:
         model = make_model()
+        if calibrate:
+            # Learns a correction curve on part of the training data (never the test patient)
+            model = CalibratedClassifierCV(model, method="sigmoid", cv=3)
         model.fit(X[train_idx], y[train_idx])
-        # Column 1 of predict_proba = probability of class 1 (seizure)
         probs[test_idx] = model.predict_proba(X[test_idx])[:, 1]
 
     pred = features[ID_COLS].copy()
@@ -71,3 +75,19 @@ def fit_final_model(features):
     model = make_model()
     model.fit(features[feature_names()].values, features["label"].values)
     return model
+
+def expected_calibration_error(y, p, n_bins=10):
+    """ECE: average gap between predicted probability and actual seizure rate.
+
+    0 = perfectly honest probabilities; larger = less trustworthy.
+    """
+    y, p = np.asarray(y), np.asarray(p)
+    edges = np.linspace(0, 1, n_bins + 1)               # 0.0, 0.1, ..., 1.0
+    bin_ids = np.clip(np.digitize(p, edges) - 1, 0, n_bins - 1)
+    ece = 0.0
+    for b in range(n_bins):
+        in_bin = bin_ids == b
+        if in_bin.any():
+            gap = abs(y[in_bin].mean() - p[in_bin].mean())   # actual rate vs predicted
+            ece += in_bin.mean() * gap                        # weight by share of windows
+    return ece
