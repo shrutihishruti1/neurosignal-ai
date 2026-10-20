@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# EEG data — too large for GitHub
+data/raw/
+*.edf
+
+data/features/
