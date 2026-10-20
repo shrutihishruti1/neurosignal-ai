@@ -4,7 +4,7 @@
 
 > Research prototype only. Not for clinical seizure diagnosis.
 
-- **Live demo:** [http://localhost:8501]
+- **Live demo:** [run locally with `streamlit run app/app.py` (deployed link coming)]
 - **Demo video:** [video link]
 - **Team:** Shruti Chatterjee (individual participant)
 
