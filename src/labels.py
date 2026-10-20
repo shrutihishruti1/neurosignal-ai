@@ -1,7 +1,11 @@
+"""Parse CHB-MIT summary files into a table of seizure start/end times."""
 import re
 import pandas as pd
 from src import config
 
+# Regex patterns for the three line types we need in each summary file.
+# (\S+\.edf) captures the file name; (\d+) captures the seconds value.
+# (?:\s+\d+)? allows both "Seizure Start Time" and "Seizure 1 Start Time".
 FILE_RE = re.compile(r"File Name:\s*(\S+\.edf)")
 START_RE = re.compile(r"Seizure(?:\s+\d+)?\s+Start Time:\s*(\d+)\s*seconds")
 END_RE = re.compile(r"Seizure(?:\s+\d+)?\s+End Time:\s*(\d+)\s*seconds")
@@ -11,17 +15,22 @@ def parse_summary(patient):
     """Return one row per seizure (patient, file, start, end) for one patient."""
     text = (config.RAW_DIR / f"{patient}-summary.txt").read_text()
     rows = []
-    current_file = None
-    start = None
+    current_file = None  # file we are currently reading about
+    start = None         # start time of the seizure being read
+
+    # Read line by line, remembering the current file (a simple state machine)
     for line in text.splitlines():
         file_match = FILE_RE.search(line)
         if file_match:
             current_file = file_match.group(1)
             continue
+
         start_match = START_RE.search(line)
         if start_match:
             start = int(start_match.group(1))
             continue
+
+        # An end time completes a seizure, so save one row
         end_match = END_RE.search(line)
         if end_match:
             rows.append({
@@ -36,7 +45,10 @@ def parse_summary(patient):
 def load_all_labels():
     """Seizure table for all patients, kept to the files we downloaded."""
     labels = pd.concat([parse_summary(p) for p in config.PATIENTS], ignore_index=True)
+
+    # Summaries list every file; keep only the 30 we actually downloaded
     downloaded = {f.name for f in config.RAW_DIR.glob("*.edf")}
     labels = labels[labels["file"].isin(downloaded)].reset_index(drop=True)
+
     labels["duration"] = labels["end"] - labels["start"]
     return labels
