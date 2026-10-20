@@ -7,7 +7,7 @@
 - **Live demo:**[run locally with `streamlit run app/app.py`](https://drive.google.com/file/d/1y-zSN3eOh9QXixRHgoNbyT3RMx9tKcN6/view?usp=drive_link)
 - ** Project Demo video:** [(https://drive.google.com/file/d/1Eu50P2lv9M30YJYk2DXx9LhiEcNNTki0/view?usp=sharing)]
 
-## if the Project demo isnot working well as 100mb restriction. Please try this full video!!
+**if the Project demo isnot working well as 100mb restriction. Please try this full video!!**
 
 - **Team:** Shruti Chatterjee (individual participant)
 
