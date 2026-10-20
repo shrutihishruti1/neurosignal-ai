@@ -5,7 +5,7 @@
 > Research prototype only. Not for clinical seizure diagnosis.
 
 - **Live demo:** [run locally with `streamlit run app/app.py` (deployed link coming)]
-- **Demo video:** [video link]
+- **Demo video:** [(https://drive.google.com/file/d/1y-zSN3eOh9QXixRHgoNbyT3RMx9tKcN6/view?usp=drive_link)]
 - **Team:** Shruti Chatterjee (individual participant)
 
 ![Demo: EEG, spectrogram, seizure probability and event tracks](docs/demo_timeline.png)
