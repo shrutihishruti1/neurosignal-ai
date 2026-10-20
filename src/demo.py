@@ -37,20 +37,21 @@ def load_clip(path):
 
 
 def demo_figure(clip, threshold=0.3, review=(0.3, 0.7)):
-    """Three stacked panels: EEG waveform, spectrogram, seizure probability timeline."""
+    """Four stacked panels: EEG, spectrogram, probability, and event tracks."""
     eeg, sfreq, t0 = clip["eeg"], int(clip["sfreq"]), float(clip["t0"])
-    t = t0 + np.arange(eeg.shape[1]) / sfreq                  # time axis in seconds
+    t = t0 + np.arange(eeg.shape[1]) / sfreq                  # time of every sample (s)
     starts, probs = clip["win_starts"], clip["probs"]
+    events = detect_events(pd.DataFrame({"start": starts, "prob": probs}), threshold)
 
-    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True,
-                             gridspec_kw={"height_ratios": [3, 2, 2]})
+    fig, axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True,
+                             gridspec_kw={"height_ratios": [3, 2, 2, 0.8]})
 
     # Panel 1: EEG waveform, channels stacked with an offset
     for i, ch in enumerate(clip["channels"]):
         axes[0].plot(t, eeg[i] - i * 500, linewidth=0.5, color="black")
         axes[0].text(t[0] - 1, -i * 500, ch, ha="right", va="center", fontsize=8)
     axes[0].set_yticks([])
-    axes[0].set_title(f"EEG: {clip['source_file']} (6 of 21 channels)")
+    axes[0].set_title(f"EEG: {clip['source_file']} (6 of 21 channels) — red = labelled seizure")
 
     # Panel 2: spectrogram of one temporal channel (power per frequency over time)
     f, ts, power = spectrogram(eeg[1], fs=sfreq, nperseg=sfreq, noverlap=sfreq // 2)
@@ -60,26 +61,29 @@ def demo_figure(clip, threshold=0.3, review=(0.3, 0.7)):
     axes[1].set_ylabel("Frequency (Hz)")
     axes[1].set_title(f"Spectrogram ({clip['channels'][1]})")
 
-    # Panel 3: probability timeline with threshold and review band
+    # Red seizure shading on the two signal panels only (nothing else drawn there)
+    for s_start, s_end in clip["seizures"]:
+        for ax in axes[:2]:
+            ax.axvspan(s_start, s_end, color="red", alpha=0.15)
+
+    # Panel 3: probability line, threshold and review zone (grey), no other shading
+    axes[2].axhspan(*review, color="lightgrey", alpha=0.6, label="Needs expert review (0.3–0.7)")
+    axes[2].axhline(threshold, color="black", linestyle="--", label=f"Alarm threshold {threshold}")
     axes[2].plot(starts + config.WINDOW_SEC / 2, probs, marker=".", color="tab:blue",
                  label="Seizure probability")
-    axes[2].axhspan(*review, color="orange", alpha=0.2, label="Needs expert review")
-    axes[2].axhline(threshold, color="grey", linestyle="--", label=f"Threshold {threshold}")
     axes[2].set_ylim(0, 1)
     axes[2].set_ylabel("Probability")
-    axes[2].set_xlabel("Time in recording (s)")
-
-    # Shade the true seizure (red) on every panel
-    for s_start, s_end in clip["seizures"]:
-        for ax in axes:
-            ax.axvspan(s_start, s_end, color="red", alpha=0.12)
-
-    # Shade detected alarms (green) on the timeline
-    events = detect_events(pd.DataFrame({"start": starts, "prob": probs}), threshold)
-    for e_start, e_end, _ in events:
-        axes[2].axvspan(e_start, e_end, color="green", alpha=0.25)
-
     axes[2].legend(loc="upper left", fontsize=8)
+
+    # Panel 4: two separate rows so colours never overlap
+    seizure_bars = [(s, e - s) for s, e in clip["seizures"]]       # (start, width)
+    alarm_bars = [(s, e - s) for s, e, _ in events]
+    axes[3].broken_barh(seizure_bars, (1.1, 0.8), color="red")
+    axes[3].broken_barh(alarm_bars, (0.1, 0.8), color="green")
+    axes[3].set_yticks([0.5, 1.5], ["Model alarms", "Labelled seizure"])
+    axes[3].set_ylim(0, 2)
+    axes[3].set_xlabel("Time in recording (s)")
+
     axes[0].set_xlim(t[0], t[-1])
     fig.tight_layout()
     return fig
