@@ -70,3 +70,37 @@ def evaluate_events(pred, labels, threshold, min_consecutive=2):
         "median_latency_s": float(np.median(latencies)) if latencies else None,
     }
     return summary, pd.DataFrame(per_patient).T
+def seizure_outcomes(pred, labels, threshold, min_consecutive=2):
+    """One row per true seizure: was it detected, and how confident was the model?"""
+    rows = []
+    for _, sz in labels.iterrows():
+        file_pred = pred[pred["file"] == sz["file"]]
+        events = detect_events(file_pred, threshold, min_consecutive)
+        # Windows that overlap this seizure
+        during = file_pred[(file_pred["start"] < sz["end"]) &
+                           (file_pred["start"] + config.WINDOW_SEC > sz["start"])]
+        rows.append({
+            "patient": sz["patient"],
+            "file": sz["file"],
+            "duration_s": sz["duration"],
+            "detected": any(overlaps(e, sz) for e in events),
+            "max_prob": round(during["prob"].max(), 3),   # model's highest confidence
+        })
+    return pd.DataFrame(rows)
+
+
+def false_alarm_list(pred, labels, threshold, min_consecutive=2):
+    """One row per false alarm (an alarm that overlaps no seizure)."""
+    rows = []
+    for file_name, file_pred in pred.groupby("file"):
+        seizures = labels[labels["file"] == file_name]
+        for start_s, end_s, alarm_s in detect_events(file_pred, threshold, min_consecutive):
+            event = (start_s, end_s, alarm_s)
+            if not any(overlaps(event, sz) for _, sz in seizures.iterrows()):
+                rows.append({
+                    "patient": file_pred["patient"].iloc[0],
+                    "file": file_name,
+                    "start_s": start_s,
+                    "duration_s": end_s - start_s,
+                })
+    return pd.DataFrame(rows)
